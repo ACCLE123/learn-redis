@@ -27,8 +27,26 @@ type Resp struct {
 	reader *bufio.Reader
 }
 
+type Write struct {
+	writer io.Writer
+}
+
 func NewResp(reader io.Reader) *Resp {
 	return &Resp{reader: bufio.NewReader(reader)}
+}
+
+func NewWrite(writer io.Writer) *Write {
+	return &Write{writer: writer}
+}
+
+func (w *Write) Write(v Value) error {
+	var bytes = v.Marshal()
+
+	_, err := w.writer.Write(bytes)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *Resp) readLine() (line []byte, n int, err error) {
@@ -110,4 +128,64 @@ func (r *Resp) readBulk() (Value, error) {
 	r.readLine()
 
 	return v, nil
+}
+
+func (v Value) Marshal() []byte {
+	switch v.typ {
+	case "array":
+		return v.MarshalArray()
+	case "bulk":
+		return v.marshalBulk()
+	case "string":
+		return v.marshalString()
+	case "null":
+		return v.marshalNull()
+	case "error":
+		return v.marshalError()
+	default:
+		return []byte{}
+	}
+}
+
+func (v Value) marshalString() []byte {
+	var bytes []byte
+	bytes = append(bytes, STRING)
+	bytes = append(bytes, v.str...)
+	bytes = append(bytes, '\r', '\n')
+	return bytes
+}
+
+func (v Value) marshalBulk() []byte {
+	var bytes []byte
+	bytes = append(bytes, ARRAY)
+	bytes = append(bytes, strconv.Itoa(len(v.bulk))...)
+	bytes = append(bytes, '\r', '\n')
+	bytes = append(bytes, v.bulk...)
+	bytes = append(bytes, '\r', '\n')
+	return bytes
+}
+
+func (v Value) MarshalArray() []byte {
+	n := len(v.array)
+	var bytes []byte
+	bytes = append(bytes, ARRAY)
+	bytes = append(bytes, strconv.Itoa(n)...)
+	bytes = append(bytes, '\r', '\n')
+
+	for i := 0; i < n; i++ {
+		bytes = append(bytes, v.array[i].marshalBulk()...)
+	}
+	return bytes
+}
+
+func (v Value) marshalError() []byte {
+	var bytes []byte
+	bytes = append(bytes, ERROR)
+	bytes = append(bytes, v.str...)
+	bytes = append(bytes, '\r', '\n')
+	return bytes
+}
+
+func (v Value) marshalNull() []byte {
+	return []byte("$-1\r\n")
 }
