@@ -157,7 +157,7 @@ func (v Value) marshalString() []byte {
 
 func (v Value) marshalBulk() []byte {
 	var bytes []byte
-	bytes = append(bytes, ARRAY)
+	bytes = append(bytes, BULK)
 	bytes = append(bytes, strconv.Itoa(len(v.bulk))...)
 	bytes = append(bytes, '\r', '\n')
 	bytes = append(bytes, v.bulk...)
