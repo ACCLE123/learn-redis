@@ -5,3 +5,4 @@
 3. another data struct
 4. expired time
 5. lua
+6. del

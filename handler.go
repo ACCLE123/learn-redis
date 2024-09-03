@@ -8,6 +8,7 @@ var Handler = map[string]func([]Value) Value{
 	"GET":  get,
 	"HSET": hset,
 	"HGET": hget,
+	"SAVE": save,
 }
 
 var SETs = map[string]string{}
@@ -85,4 +86,21 @@ func hget(args []Value) Value {
 		return Value{typ: "null"}
 	}
 	return Value{typ: "bulk", bulk: value}
+}
+
+func save(args []Value) Value {
+	if len(args) != 0 {
+		return Value{typ: "error", str: "save wrong number of arguments"}
+	}
+
+	rdb, err := NewRdb("database.rdb")
+	if err != nil {
+		return Value{typ: "error", str: err.Error()}
+	}
+	err = rdb.Save()
+	if err != nil {
+		return Value{typ: "error", str: err.Error()}
+	}
+
+	return Value{typ: "string", str: "OK"}
 }
