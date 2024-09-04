@@ -7,6 +7,13 @@ import (
 )
 
 func main() {
+	config, err := NewConfig("redis.config")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	config.ReadConfig()
+
 	l, err := net.Listen("tcp", ":6380")
 	if err != nil {
 		fmt.Println(err)
