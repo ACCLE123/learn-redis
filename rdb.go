@@ -35,10 +35,12 @@ func (r *Rdb) Save() error {
 	}
 
 	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	r.file.Truncate(0)
 	r.file.Write(sets)
 	r.file.Write(hsets)
-	r.mu.Unlock()
+	r.file.Sync()
 
 	return nil
 }
