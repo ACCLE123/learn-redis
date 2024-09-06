@@ -7,6 +7,7 @@ import (
 
 type Treap struct {
 	key, val, cnt, size int
+	value               string
 	l, r                *Treap
 }
 
@@ -20,8 +21,8 @@ func (t *Treap) pushUp() {
 	}
 }
 
-func getNode(key int) *Treap {
-	node := &Treap{key: key, val: rand.Int(), cnt: 1, size: 1}
+func getNode(key int, value string) *Treap {
+	node := &Treap{key: key, val: rand.Int(), cnt: 1, size: 1, value: value}
 	return node
 }
 
@@ -54,8 +55,8 @@ func zig(p **Treap) {
 }
 
 func NewTreap() *Treap {
-	root := getNode(-math.MaxInt)
-	node := getNode(math.MaxInt)
+	root := getNode(-math.MaxInt, "")
+	node := getNode(math.MaxInt, "")
 	root.r = node
 	if root.val < node.val {
 		zag(&root)
@@ -63,25 +64,26 @@ func NewTreap() *Treap {
 	return root
 }
 
-func Insert(u **Treap, key int) {
+func Insert(u **Treap, key int, value string) (node *Treap) {
 	if *u == nil {
-		*u = getNode(key)
-		return
+		*u = getNode(key, value)
+		return *u
 	}
 	if (*u).key == key {
 		(*u).cnt++
 	} else if (*u).key < key {
-		Insert(&(*u).r, key)
+		Insert(&(*u).r, key, value)
 		if (*u).r.val > (*u).val {
 			zag(u)
 		}
 	} else {
-		Insert(&(*u).l, key)
+		Insert(&(*u).l, key, value)
 		if (*u).l.val > (*u).val {
 			zig(u)
 		}
 	}
 	(*u).pushUp()
+	return *u
 }
 
 func Delete(u **Treap, key int) {
@@ -135,6 +137,7 @@ func GetNext(u **Treap, key int) int {
 	}
 }
 
+// TODO bug
 func GetRankByKey(u **Treap, key int) int {
 	return getRankByKey(u, key) - 1
 }

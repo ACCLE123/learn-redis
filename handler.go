@@ -1,15 +1,19 @@
 package main
 
-import "sync"
+import (
+	"sync"
+)
 
 var Handler = map[string]func([]Value) Value{
-	"PING": ping,
-	"SET":  set,
-	"GET":  get,
-	"HSET": hset,
-	"HGET": hget,
-	"SAVE": save,
-	"DEL":  del,
+	"PING":  ping,
+	"SET":   set,
+	"GET":   get,
+	"HSET":  hset,
+	"HGET":  hget,
+	"SAVE":  save,
+	"DEL":   del,
+	"ZCARD": zcard,
+	"ZADD":  zadd,
 }
 
 var SETs = map[string]string{}
@@ -17,6 +21,16 @@ var SETsMu = sync.RWMutex{}
 
 var HSETs = map[string]map[string]string{}
 var HSETsMu = sync.RWMutex{}
+
+type ZSET struct {
+	treap    *Treap
+	elements map[string]*Treap
+	mu       sync.RWMutex
+}
+
+var ZSETsMu sync.RWMutex
+
+var ZSETs = map[string]*ZSET{}
 
 func ping(args []Value) Value {
 	if len(args) == 0 {
@@ -121,4 +135,53 @@ func del(args []Value) Value {
 	SETsMu.Unlock()
 
 	return Value{typ: "string", str: "ok"}
+}
+
+func zadd(args []Value) Value {
+	// zadd z2 3 yangqi 2 yangqi2 1 yangqi100
+	n := len(args)
+	if n < 2 || n%2 == 0 {
+		return Value{typ: "error", str: "zadd wrong number of arguments"}
+	}
+	key := args[0].bulk
+
+	ZSETsMu.Lock()
+	zset, exists := ZSETs[key]
+	if !exists {
+		zset = &ZSET{treap: NewTreap(), elements: map[string]*Treap{}}
+		ZSETs[key] = zset
+	}
+	ZSETsMu.Unlock()
+
+	zset.mu.Lock()
+	for i := 1; i < n; i += 2 {
+		score := args[i].num
+		value := args[i+1].bulk
+		if node, exists := zset.elements[value]; exists {
+			Delete(&zset.treap, node.key)
+		}
+		zset.elements[value] = Insert(&zset.treap, score, value)
+	}
+	zset.mu.Unlock()
+
+	return Value{typ: "integer", num: (n - 1) / 2}
+}
+
+func zrange(args []Value) Value {
+	return Value{}
+}
+
+func zrem(args []Value) Value {
+	return Value{}
+}
+
+func zcard(args []Value) Value {
+	if len(args) != 1 {
+		return Value{typ: "error", str: "zard wrong number of arguments"}
+	}
+	key := args[0].bulk
+	zset := ZSETs[key]
+	size := len(zset.elements)
+
+	return Value{typ: "integer", num: size}
 }
