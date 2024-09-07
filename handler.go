@@ -17,6 +17,7 @@ var Handler = map[string]func([]Value) Value{
 	"ZCARD":  zcard,
 	"ZADD":   zadd,
 	"ZRANGE": zrange,
+	"ZREM":   zrem,
 }
 
 var SETs = map[string]string{}
@@ -182,12 +183,11 @@ func zrange(args []Value) Value {
 	end, _ := strconv.ParseInt(args[2].bulk, 10, 64)
 
 	ZSETsMu.RLock()
+	defer ZSETsMu.RUnlock()
 	zset, exists := ZSETs[key]
 	if !exists {
-		ZSETsMu.RUnlock()
 		return Value{typ: "error", str: "zrange wrong"}
 	}
-	ZSETsMu.RUnlock()
 
 	zset.mu.RLock()
 
@@ -209,7 +209,33 @@ func zrange(args []Value) Value {
 }
 
 func zrem(args []Value) Value {
-	return Value{}
+	n := len(args)
+	if n < 2 {
+		return Value{typ: "error", str: "zrem wrong number of arguments"}
+	}
+
+	key := args[0].bulk
+	ZSETsMu.Lock()
+	defer ZSETsMu.Unlock()
+	zset, exists := ZSETs[key]
+	if !exists {
+		return Value{typ: "error", str: "zrem wrong"}
+	}
+
+	zset.mu.Lock()
+	defer zset.mu.Unlock()
+
+	cnt := 0
+	for i := 1; i < n; i++ {
+		value := args[i].bulk
+		if node, exists := zset.elements[value]; exists {
+			zset.treap.Erase(node.key, value)
+			delete(zset.elements, value)
+			cnt++
+		}
+	}
+
+	return Value{typ: "integer", num: cnt}
 }
 
 func zcard(args []Value) Value {
