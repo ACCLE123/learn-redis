@@ -6,9 +6,13 @@
 4. expired time
 5. lua
 6. del
+7. graph
 
+---
 
 ### zset
+
+使用hreap
 
 ---
 
@@ -25,5 +29,14 @@
 
 --- 
 
-hreap 
+实现的方法
+
+`zadd`
+`zrange`
+`zcard`
+`zrem`
+
+---
+
+
 

@@ -1,182 +1,193 @@
 package main
 
 import (
-	"math"
+	"fmt"
 	"math/rand"
 )
 
-type Treap struct {
-	key, val, cnt, size int
+type TreapNode struct {
+	key, priority, size int
 	value               string
-	l, r                *Treap
+	l, r                *TreapNode
 }
 
-func (t *Treap) pushUp() {
-	t.size = t.cnt
-	if t.l != nil {
-		t.size += t.l.size
-	}
-	if t.r != nil {
-		t.size += t.r.size
-	}
+type Treap struct {
+	root *TreapNode
+	size int
 }
 
-func getNode(key int, value string) *Treap {
-	node := &Treap{key: key, val: rand.Int(), cnt: 1, size: 1, value: value}
-	return node
+func NewTreapNode(key int, value string) *TreapNode {
+	return &TreapNode{key: key, value: value, priority: rand.Int(), size: 1}
 }
 
-func zag(p **Treap) {
-	if p == nil || *p == nil || (*p).r == nil {
-		return
-	}
-	q := (*p).r
-	(*p).r = q.l
-	q.l = *p
-	*p = q
-	if (*p).r != nil {
-		(*p).r.pushUp()
-	}
-	(*p).pushUp()
+func NewTreap() *Treap {
+	return &Treap{}
 }
 
-func zig(p **Treap) {
-	if p == nil || *p == nil || (*p).l == nil {
+func pushUp(u *TreapNode) {
+	var lsize, rsize int
+	if u.l != nil {
+		lsize = u.l.size
+	}
+	if u.r != nil {
+		rsize = u.r.size
+	}
+	u.size = lsize + rsize + 1
+}
+
+func zig(p **TreapNode) {
+	if (*p) == nil || (*p).l == nil {
 		return
 	}
 	q := (*p).l
 	(*p).l = q.r
 	q.r = *p
 	*p = q
-	if (*p).l != nil {
-		(*p).l.pushUp()
-	}
-	(*p).pushUp()
+	pushUp((*p).r)
+	pushUp(*p)
 }
 
-func NewTreap() *Treap {
-	root := getNode(-math.MaxInt, "")
-	node := getNode(math.MaxInt, "")
-	root.r = node
-	if root.val < node.val {
-		zag(&root)
-	}
-	return root
-}
-
-func Insert(u **Treap, key int, value string) (node *Treap) {
-	if *u == nil {
-		*u = getNode(key, value)
-		return *u
-	}
-	if (*u).key == key {
-		(*u).cnt++
-	} else if (*u).key < key {
-		Insert(&(*u).r, key, value)
-		if (*u).r.val > (*u).val {
-			zag(u)
-		}
-	} else {
-		Insert(&(*u).l, key, value)
-		if (*u).l.val > (*u).val {
-			zig(u)
-		}
-	}
-	(*u).pushUp()
-	return *u
-}
-
-func Delete(u **Treap, key int) {
-	if *u == nil {
+func zag(p **TreapNode) {
+	if (*p) == nil || (*p).r == nil {
 		return
 	}
-	if (*u).key == key {
-		if (*u).cnt > 1 {
-			(*u).cnt--
-		} else if (*u).l != nil || (*u).r != nil {
-			if (*u).r == nil || (*u).l != nil && (*u).l.val > (*u).r.val {
+	q := (*p).r
+	(*p).r = q.l
+	q.l = *p
+	*p = q
+	pushUp((*p).l)
+	pushUp(*p)
+}
+
+func (t *Treap) Insert(key int, value string) (*TreapNode, bool) {
+	node, ok := insert(&t.root, key, value)
+	if ok {
+		t.size++
+		return node, ok
+	}
+	return nil, false
+}
+
+func insert(u **TreapNode, key int, value string) (*TreapNode, bool) {
+	if *u == nil {
+		*u = NewTreapNode(key, value)
+		return *u, true
+	}
+	if (*u).key > key || ((*u).key == key && (*u).value > value) {
+		node, ok := insert(&(*u).l, key, value)
+		if (*u).l.priority > (*u).priority {
+			zig(u)
+		}
+		pushUp(*u)
+		return node, ok
+	} else if (*u).key < key || ((*u).key == key && (*u).value < value) {
+		node, ok := insert(&(*u).r, key, value)
+		if (*u).r.priority > (*u).priority {
+			zag(u)
+		}
+		pushUp(*u)
+		return node, ok
+	} else {
+		pushUp(*u)
+		return nil, false
+	}
+}
+
+func (t *Treap) Erase(key int, value string) {
+	t.size--
+	erase(&t.root, key, value)
+}
+
+func erase(u **TreapNode, key int, value string) bool {
+	if *u == nil {
+		return false
+	}
+	if (*u).key > key || (*u).key == key && (*u).value > value {
+		ok := erase(&(*u).l, key, value)
+		pushUp(*u)
+		return ok
+	} else if (*u).key < key || (*u).key == key && (*u).value < value {
+		ok := erase(&(*u).r, key, value)
+		pushUp(*u)
+		return ok
+	} else {
+		if (*u).r != nil || (*u).l != nil {
+			if (*u).r == nil || (*u).l != nil && (*u).l.priority > (*u).r.priority {
 				zig(u)
-				Delete(&(*u).r, key)
+				ok := erase(&(*u).r, key, value)
+				pushUp(*u)
+				return ok
 			} else {
 				zag(u)
-				Delete(&(*u).l, key)
+				ok := erase(&(*u).l, key, value)
+				pushUp(*u)
+				return ok
 			}
 		} else {
-			*u = nil
+			*(u) = nil
+			return true
 		}
-	} else if (*u).key < key {
-		Delete(&(*u).r, key)
+	}
+}
+
+func (t *Treap) GetNodeByRank(rank int) *TreapNode {
+	if rank < 0 || rank > t.size {
+		return nil
+	}
+	return getNodeByRank(t.root, rank)
+}
+
+func getNodeByRank(u *TreapNode, rank int) *TreapNode {
+	var lsize int
+	if u.l != nil {
+		lsize = u.l.size
+	}
+
+	if rank <= lsize {
+		return getNodeByRank(u.l, rank)
+	} else if rank <= lsize+1 {
+		return u
 	} else {
-		Delete(&(*u).l, key)
-	}
-
-	if *u != nil {
-		(*u).pushUp()
+		return getNodeByRank(u.r, rank-1-lsize)
 	}
 }
 
-func GetPrev(u **Treap, key int) int {
-	if *u == nil {
-		return -math.MaxInt
+func (t *Treap) Bfs() {
+	if t.root == nil {
+		return
 	}
-	if (*u).key >= key {
-		return GetPrev(&(*u).l, key)
-	} else {
-		return max((*u).key, GetPrev(&(*u).r, key))
+
+	currentLevel := []*TreapNode{t.root}
+	nextLevel := []*TreapNode{}
+
+	for len(currentLevel) > 0 {
+		for _, node := range currentLevel {
+			if node == nil {
+				//fmt.Printf("key: %d, value: %s, priority: %d, size: %d  ", 0, "", 0, 0)
+				fmt.Printf("[%d]", 0)
+			} else {
+				//fmt.Printf("key: %d, value: %s, priority: %d, size: %d  ", node.key, node.value, node.priority, node.size)
+				fmt.Printf("[%d]", node.key)
+				nextLevel = append(nextLevel, node.l)
+				nextLevel = append(nextLevel, node.r)
+			}
+		}
+		fmt.Println()
+
+		currentLevel = nextLevel
+		nextLevel = []*TreapNode{}
 	}
 }
 
-func GetNext(u **Treap, key int) int {
-	if *u == nil {
-		return math.MaxInt
-	}
-	if (*u).key <= key {
-		return GetNext(&(*u).r, key)
-	} else {
-		return min((*u).key, GetNext(&(*u).l, key))
-	}
+func (t *Treap) Inorder() {
+	inorder(t.root)
 }
 
-// TODO bug
-func GetRankByKey(u **Treap, key int) int {
-	return getRankByKey(u, key) - 1
-}
-
-func getRankByKey(u **Treap, key int) int {
-	if *u == nil {
-		return -math.MaxInt
+func inorder(p *TreapNode) {
+	if p == nil {
+		return
 	}
-	lsize := 0
-	if (*u).l != nil {
-		lsize = (*u).l.size
-	}
-	if (*u).key == key {
-		return lsize + 1
-	} else if (*u).key > key {
-		return getRankByKey(&(*u).l, key)
-	} else {
-		return lsize + (*u).cnt + getRankByKey(&(*u).r, key)
-	}
-}
-
-func GetKeyByRank(u **Treap, rank int) int {
-	return getKeyByRank(u, rank+1)
-}
-
-func getKeyByRank(u **Treap, rank int) int {
-	if *u == nil {
-		return math.MaxInt
-	}
-	lsize := 0
-	if (*u).l != nil {
-		lsize = (*u).l.size
-	}
-
-	if lsize >= rank {
-		return getKeyByRank(&(*u).l, rank)
-	} else if lsize+(*u).cnt >= rank {
-		return (*u).key
-	} else {
-		return getKeyByRank(&(*u).r, rank-(*u).cnt-lsize)
-	}
+	inorder(p.l)
+	fmt.Printf("key: %d, value: %s\n", p.key, p.value)
+	inorder(p.r)
 }

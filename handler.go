@@ -1,19 +1,22 @@
 package main
 
 import (
+	"fmt"
+	"strconv"
 	"sync"
 )
 
 var Handler = map[string]func([]Value) Value{
-	"PING":  ping,
-	"SET":   set,
-	"GET":   get,
-	"HSET":  hset,
-	"HGET":  hget,
-	"SAVE":  save,
-	"DEL":   del,
-	"ZCARD": zcard,
-	"ZADD":  zadd,
+	"PING":   ping,
+	"SET":    set,
+	"GET":    get,
+	"HSET":   hset,
+	"HGET":   hget,
+	"SAVE":   save,
+	"DEL":    del,
+	"ZCARD":  zcard,
+	"ZADD":   zadd,
+	"ZRANGE": zrange,
 }
 
 var SETs = map[string]string{}
@@ -24,7 +27,7 @@ var HSETsMu = sync.RWMutex{}
 
 type ZSET struct {
 	treap    *Treap
-	elements map[string]*Treap
+	elements map[string]*TreapNode
 	mu       sync.RWMutex
 }
 
@@ -138,7 +141,6 @@ func del(args []Value) Value {
 }
 
 func zadd(args []Value) Value {
-	// zadd z2 3 yangqi 2 yangqi2 1 yangqi100
 	n := len(args)
 	if n < 2 || n%2 == 0 {
 		return Value{typ: "error", str: "zadd wrong number of arguments"}
@@ -148,7 +150,7 @@ func zadd(args []Value) Value {
 	ZSETsMu.Lock()
 	zset, exists := ZSETs[key]
 	if !exists {
-		zset = &ZSET{treap: NewTreap(), elements: map[string]*Treap{}}
+		zset = &ZSET{treap: NewTreap(), elements: make(map[string]*TreapNode)}
 		ZSETs[key] = zset
 	}
 	ZSETsMu.Unlock()
@@ -158,9 +160,12 @@ func zadd(args []Value) Value {
 		score := args[i].num
 		value := args[i+1].bulk
 		if node, exists := zset.elements[value]; exists {
-			Delete(&zset.treap, node.key)
+			zset.treap.Erase(node.key, value)
 		}
-		zset.elements[value] = Insert(&zset.treap, score, value)
+		node, ok := zset.treap.Insert(score, value)
+		if ok {
+			zset.elements[value] = node
+		}
 	}
 	zset.mu.Unlock()
 
@@ -168,7 +173,39 @@ func zadd(args []Value) Value {
 }
 
 func zrange(args []Value) Value {
-	return Value{}
+	n := len(args)
+	if n != 3 {
+		return Value{typ: "error", str: "zrange wrong number of arguments"}
+	}
+	key := args[0].bulk
+	begin, _ := strconv.ParseInt(args[1].bulk, 10, 64)
+	end, _ := strconv.ParseInt(args[2].bulk, 10, 64)
+
+	ZSETsMu.RLock()
+	zset, exists := ZSETs[key]
+	if !exists {
+		ZSETsMu.RUnlock()
+		return Value{typ: "error", str: "zrange wrong"}
+	}
+	ZSETsMu.RUnlock()
+
+	zset.mu.RLock()
+
+	size := int64(zset.treap.size)
+	begin = (begin%size + size) % size
+	end = (end%size + size) % size
+	if begin > end {
+		zset.mu.RLock()
+		return Value{typ: "error", str: "zrange wrong"}
+	}
+	res := Value{typ: "array", array: make([]Value, 0)}
+	for i := begin + 1; i <= end+1; i++ {
+		res.array = append(res.array, Value{typ: "bulk", bulk: fmt.Sprintf("%s", zset.treap.GetNodeByRank(int(i)).value)})
+	}
+
+	zset.mu.RUnlock()
+
+	return res
 }
 
 func zrem(args []Value) Value {
@@ -181,7 +218,6 @@ func zcard(args []Value) Value {
 	}
 	key := args[0].bulk
 	zset := ZSETs[key]
-	size := len(zset.elements)
 
-	return Value{typ: "integer", num: size}
+	return Value{typ: "integer", num: zset.treap.size}
 }
